@@ -164,6 +164,7 @@ const server = http.createServer(async (req, res) => {
         email: b.email || (b.username + '@slacoin.io'),
         password: b.password,
         balance: 0,
+        activated: false,
         referralCode,
         invitedBy
       };
@@ -190,6 +191,9 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const user = db.users[String(b.username || '').toLowerCase()];
       if (!user) return send(res, 404, { error: 'User not found' });
+      if (!user.activated && !(Number(user.balance) > 0)) {
+        return send(res, 403, { error: 'please activate your account to use this service' });
+      }
       const product = db.products.find(x => x.id === b.productId);
       if (!product) return send(res, 404, { error: 'Product not found' });
       const q = Math.max(1, parseInt(b.qty, 10) || 1);
@@ -213,18 +217,33 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       const user = db.users[String(b.username || '').toLowerCase()];
       if (!user) return send(res, 404, { error: 'User not found' });
+      if (!user.activated && !(Number(user.balance) > 0)) {
+        return send(res, 403, { error: 'please activate your account to use this service' });
+      }
       const code = String(b.code || '').trim().toUpperCase();
       const entry = db.codes[code];
       if (!entry) return send(res, 400, { error: 'Invalid code' });
       if (entry.used) return send(res, 400, { error: 'Code used' });
       entry.used = true;
       user.balance += Number(entry.amount);
+      user.activated = true;
       db.pending.unshift({
         id: 'RCH-' + Date.now(), type: 'recharge', username: user.username,
         amount: entry.amount, code, status: 'completed', date: new Date().toISOString()
       });
       saveDB(db);
       return send(res, 200, { ok: true, amount: entry.amount, balance: user.balance });
+    }
+
+    if (p === '/api/activate' && req.method === 'POST') {
+      const b = await readBody(req);
+      const key = String(b.username || '').toLowerCase();
+      const user = db.users[key];
+      if (!user) return send(res, 404, { error: 'User not found' });
+      user.activated = true;
+      saveDB(db);
+      const { password, ...pub } = user;
+      return send(res, 200, { ok: true, user: pub });
     }
 
     if (p === '/api/pending' && req.method === 'GET') {

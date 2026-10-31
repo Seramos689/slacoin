@@ -106,9 +106,20 @@
     <section id="tab-users" class="hidden">
       <div class="card">
         <h2>Users & Referrals</h2>
+        <div class="row" style="margin-bottom:1rem;gap:1rem;flex-wrap:wrap">
+          <div class="badge" style="background:#7aab8f33;color:var(--muted);padding:.4rem .85rem;font-size:.9rem">
+            New users: <strong id="stat-new-users">0</strong>
+          </div>
+          <div class="badge" style="background:#00ff9d22;color:var(--green);padding:.4rem .85rem;font-size:.9rem">
+            Active members: <strong id="stat-active-users">0</strong>
+          </div>
+          <div class="badge" style="background:#f0c04022;color:#f0c040;padding:.4rem .85rem;font-size:.9rem">
+            Inactive: <strong id="stat-inactive-users">0</strong>
+          </div>
+        </div>
         <div style="overflow-x:auto">
           <table>
-            <thead><tr><th>Username</th><th>Location</th><th>Balance</th><th>Referral Code</th><th>Invited By</th><th></th></tr></thead>
+            <thead><tr><th>Username</th><th>Location</th><th>Balance</th><th>Status</th><th>Referral Code</th><th>Invited By</th><th></th></tr></thead>
             <tbody id="users-body"></tbody>
           </table>
         </div>
@@ -321,18 +332,56 @@ function renderUsers(){
   const accounts=getAccounts();
   const body=$('users-body');
   const rows=Object.values(accounts);
-  if(!rows.length){body.innerHTML='<tr><td colspan="6" class="muted">No users.</td></tr>';return}
-  body.innerHTML=rows.map(u=>`
+  let activeCount=0, inactiveCount=0, newCount=0;
+  rows.forEach(u=>{
+    const isActive = !!u.activated || Number(u.balance)>0;
+    if(isActive) activeCount++;
+    else {
+      inactiveCount++;
+      // treat never-activated zero-balance users as "new"
+      newCount++;
+    }
+  });
+  if($('stat-new-users')) $('stat-new-users').textContent = newCount;
+  if($('stat-active-users')) $('stat-active-users').textContent = activeCount;
+  if($('stat-inactive-users')) $('stat-inactive-users').textContent = inactiveCount;
+
+  if(!rows.length){body.innerHTML='<tr><td colspan="7" class="muted">No users.</td></tr>';return}
+  body.innerHTML=rows.map(u=>{
+    const isActive = !!u.activated || Number(u.balance)>0;
+    const statusBadge = isActive
+      ? '<span class="badge deposit">Active</span>'
+      : '<span class="badge pending">Inactive</span>';
+    const activateBtn = isActive
+      ? ''
+      : `<button class="btn" data-activate-user="${u.username}" style="margin-right:.4rem">Activate</button>`;
+    return `
     <tr>
       <td>${u.username}</td>
       <td>${u.country||'—'}</td>
       <td>$${Number(u.balance||0).toFixed(2)}</td>
+      <td>${statusBadge}</td>
       <td>${u.referralCode||'—'}</td>
       <td>${u.invitedBy||'—'}</td>
-      <td><button class="btn danger" data-del-user="${u.username}">Delete</button></td>
-    </tr>`).join('');
+      <td class="row" style="gap:.35rem;flex-wrap:wrap">
+        ${activateBtn}
+        <button class="btn danger" data-del-user="${u.username}">Delete</button>
+      </td>
+    </tr>`;
+  }).join('');
   body.querySelectorAll('[data-del-user]').forEach(btn=>{
     btn.onclick=()=>{if(!confirm('Delete '+btn.dataset.delUser+'?'))return;const a=getAccounts();delete a[btn.dataset.delUser.toLowerCase()];saveAccounts(a);renderUsers()};
+  });
+  body.querySelectorAll('[data-activate-user]').forEach(btn=>{
+    btn.onclick=()=>{
+      const key=btn.dataset.activateUser.toLowerCase();
+      const a=getAccounts();
+      if(!a[key]) return;
+      a[key].activated=true;
+      // ensure they can use services even with $0 after admin activation
+      saveAccounts(a);
+      renderUsers();
+    };
   });
 }
 

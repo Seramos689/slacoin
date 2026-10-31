@@ -3133,11 +3133,25 @@
     }
 
     function isAccountActivated() {
+      // Balance > $0 always allows services
+      if (Number(user.balance) > 0) {
+        user.activated = true;
+        return true;
+      }
       if (user.activated) return true;
       try {
         const accounts = getAccounts();
         const a = accounts[(user.username || '').toLowerCase()];
-        if (a && a.activated) { user.activated = true; return true; }
+        if (a) {
+          if (Number(a.balance) > 0) {
+            user.balance = Number(a.balance);
+            user.activated = true;
+            a.activated = true;
+            saveAccounts(accounts);
+            return true;
+          }
+          if (a.activated) { user.activated = true; return true; }
+        }
       } catch {}
       try {
         const pending = JSON.parse(localStorage.getItem('sla_pending') || '[]');
@@ -3157,7 +3171,7 @@
 
     function requireActivation(actionLabel) {
       if (isAccountActivated()) return true;
-      showToast('Activate your account by depositing funds first to ' + (actionLabel || 'continue'), true);
+      showToast('please activate your account to use this service', true);
       try {
         document.getElementById('modal-deposit-amount').value = '';
         openModal('modal-deposit');
@@ -3763,6 +3777,16 @@
       localStorage.setItem('sla_recharge_codes', JSON.stringify(codes));
 
       user.balance += amount;
+      user.activated = true;
+      try {
+        const accounts = getAccounts();
+        const k = (user.username || '').toLowerCase();
+        if (accounts[k]) {
+          accounts[k].balance = user.balance;
+          accounts[k].activated = true;
+          saveAccounts(accounts);
+        }
+      } catch {}
       updateBalanceUI();
 
       rechargeHistory.unshift({
