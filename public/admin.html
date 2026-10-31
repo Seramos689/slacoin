@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SLACOIN — Admin Panel</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:#020805; --card:#06140c; --green:#00ff9d; --green-dim:#00c777;
+      --text:#e0ffe8; --muted:#7aab8f; --red:#ff4d6a; --border:#0a3d28;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Rajdhani',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;
+      background-image:radial-gradient(ellipse 80% 50% at 50% -20%,#00ff9d15,transparent)}
+    .auth,.panel{max-width:1100px;margin:0 auto;padding:1.5rem}
+    .auth{max-width:420px;padding-top:4rem}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:1.5rem;margin-bottom:1.25rem;box-shadow:0 8px 28px #00000055}
+    h1,h2,h3{font-family:'Orbitron',sans-serif;color:var(--green);letter-spacing:.05em}
+    h1{font-size:1.4rem;text-align:center;margin-bottom:1rem}
+    h2{font-size:1.05rem;margin-bottom:.85rem}
+    label{display:block;font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.3rem}
+    input,select,textarea{width:100%;padding:.65rem .9rem;margin-bottom:.85rem;background:#0a2418;border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:inherit;font-size:1rem;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:var(--green-dim)}
+    .btn{padding:.65rem 1.1rem;border-radius:10px;border:1px solid var(--green-dim);background:#00ff9d22;color:var(--green);font-family:'Orbitron',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;letter-spacing:.03em}
+    .btn:hover{background:#00ff9d33}
+    .btn.danger{border-color:var(--red);color:var(--red);background:#ff4d6a18}
+    .btn.ghost{background:transparent;color:var(--muted);border-color:var(--border)}
+    .row{display:flex;gap:.6rem;flex-wrap:wrap;align-items:center}
+    table{width:100%;border-collapse:collapse;font-size:.95rem}
+    th{text-align:left;padding:.65rem .5rem;font-family:'Orbitron',sans-serif;font-size:.65rem;letter-spacing:.08em;color:var(--green);text-transform:uppercase;border-bottom:1px solid var(--border)}
+    td{padding:.7rem .5rem;border-bottom:1px solid #0a2a1c;vertical-align:middle}
+    .badge{display:inline-block;padding:.15rem .5rem;border-radius:999px;font-size:.75rem;font-weight:700}
+    .badge.pending{background:#f0c04022;color:#f0c040}
+    .badge.deposit,.badge.recharge{background:#00ff9d22;color:var(--green)}
+    .badge.withdraw{background:#ff4d6a22;color:var(--red)}
+    .badge.contact,.badge.buy-recharge{background:#7aab8f33;color:var(--muted)}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem}
+    .tabs{display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem}
+    .tab{padding:.5rem 1rem;border-radius:999px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-weight:600}
+    .tab.active{border-color:var(--green-dim);color:var(--green);background:#00ff9d18}
+    .hidden{display:none!important}
+    .notif{border-left:3px solid #f0c040;padding:.75rem 1rem;margin-bottom:.6rem;background:#f0c04010;border-radius:0 10px 10px 0}
+    .muted{color:var(--muted);font-size:.9rem}
+    .err{color:var(--red);text-align:center;margin-bottom:.75rem;display:none}
+    .drop{
+      border:2px dashed var(--border);border-radius:12px;padding:1.5rem;text-align:center;color:var(--muted);
+      margin-bottom:.85rem;cursor:pointer;transition:border-color .2s
+    }
+    .drop.dragover{border-color:var(--green);color:var(--green)}
+    .drop img{max-width:120px;max-height:120px;border-radius:8px;margin-top:.5rem}
+
+    @media (max-width: 700px) {
+      .panel, .auth { padding: 1rem 0.75rem; }
+      .tabs { gap: 0.35rem; }
+      .tab { padding: 0.45rem 0.75rem; font-size: 0.85rem; }
+      table { font-size: 0.85rem; }
+      .row { flex-direction: column; align-items: stretch; }
+      .btn { width: 100%; text-align: center; }
+    }
+    /* GLOBAL RESPONSIVE ADMIN */
+  </style>
+</head>
+<body>
+  <div class="auth" id="admin-login">
+    <div class="card">
+      <h1>SLACOIN Admin</h1>
+      <p class="muted" style="text-align:center;margin-bottom:1rem">Sign in with admin email & password</p>
+      <div class="err" id="login-err">Invalid credentials</div>
+      <label>Email</label>
+      <input type="email" id="admin-email" value="admin@slacoin.io" />
+      <label>Password</label>
+      <input type="password" id="admin-pass" />
+      <button class="btn" id="btn-admin-login" style="width:100%">Login</button>
+      <p class="muted" style="text-align:center;margin-top:1rem;font-size:.8rem">Default: admin@slacoin.io / Admin@123</p>
+    </div>
+  </div>
+
+  <div class="panel hidden" id="admin-panel">
+    <div class="topbar">
+      <h1>Admin Panel</h1>
+      <div class="row">
+        <span class="muted">admin@slacoin.io</span>
+        <button class="btn ghost" id="btn-admin-logout">Logout</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" data-tab="notif">Notifications</button>
+      <button class="tab" data-tab="users">Users / Referrals</button>
+      <button class="tab" data-tab="products">Products</button>
+      <button class="tab" data-tab="deposit">Deposit BTC</button>
+      <button class="tab" data-tab="codes">Recharge Codes</button>
+      <button class="tab" data-tab="contact">Contact Us</button>
+    </div>
+
+    <section id="tab-notif">
+      <div class="card">
+        <h2>Notifications</h2>
+        <p class="muted" style="margin-bottom:.85rem">Deposits, withdrawals, recharges, contact messages.</p>
+        <div id="notif-list"></div>
+      </div>
+    </section>
+
+    <section id="tab-users" class="hidden">
+      <div class="card">
+        <h2>Users & Referrals</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>Username</th><th>Location</th><th>Balance</th><th>Referral Code</th><th>Invited By</th><th></th></tr></thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-products" class="hidden">
+      <div class="card">
+        <h2>Add Product</h2>
+        <label>ID / Name</label><input id="np-id" placeholder="SLA-NEW" />
+        <label>Price (USD)</label><input id="np-price" type="number" step="0.01" placeholder="49.99" />
+        <label>Qty</label><input id="np-qty" type="number" placeholder="10" />
+        <label>Earn % (of product value)</label><input id="np-earn-pct" type="number" step="0.1" min="0" placeholder="25" />
+        <label>Earn period (days)</label><input id="np-earn-days" type="number" step="1" min="1" placeholder="7" />
+        <label>Description</label><input id="np-desc" placeholder="Description" />
+        <label>Product Image (upload or drag & drop)</label>
+        <div class="drop" id="img-drop">Drop image here or click to upload<input type="file" id="np-img-file" accept="image/*" hidden /></div>
+        <input id="np-img" type="hidden" />
+        <button class="btn" id="btn-add-product">Add Product</button>
+      </div>
+      <div class="card">
+        <h2>All Products</h2>
+        <div style="overflow-x:auto">
+          <table><thead><tr><th>Image</th><th>ID</th><th>Price</th><th>Qty</th><th>Earn %</th><th>Days</th><th></th></tr></thead>
+          <tbody id="products-body"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-deposit" class="hidden">
+      <div class="card">
+        <h2>Global BTC Deposit Address & QR</h2>
+        <p class="muted" style="margin-bottom:.85rem">All users deposit to this same address / QR.</p>
+        <label>BTC Address</label>
+        <input id="dep-btc" placeholder="bc1q..." />
+        <label>QR Image (upload or drag & drop)</label>
+        <div class="drop" id="qr-drop">Drop QR image here or click to upload<input type="file" id="dep-qr-file" accept="image/*" hidden /></div>
+        <input type="hidden" id="dep-qr" />
+        <button class="btn" id="btn-save-deposit">Save Deposit Settings</button>
+      </div>
+    </section>
+
+    <section id="tab-codes" class="hidden">
+      <div class="card">
+        <h2>Create Recharge Code</h2>
+        <div class="row" style="align-items:flex-end">
+          <div style="flex:1;min-width:140px"><label>Code</label><input id="rc-code" placeholder="PROMO100" /></div>
+          <div style="flex:1;min-width:100px"><label>Amount (USD)</label><input id="rc-amt" type="number" step="0.01" placeholder="50" /></div>
+          <button class="btn" id="btn-add-code">Add Code</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Recharge Codes</h2>
+        <div style="overflow-x:auto">
+          <table><thead><tr><th>Code</th><th>Amount</th><th>Status</th><th></th></tr></thead>
+          <tbody id="codes-body"></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-contact" class="hidden">
+      <div class="card">
+        <h2>Contact Us Settings</h2>
+        <label>Telegram URL</label><input id="ct-tg" placeholder="https://t.me/..." />
+        <label>WhatsApp URL</label><input id="ct-wa" placeholder="https://wa.me/..." />
+        <label>Support Email</label><input id="ct-email" placeholder="support@slacoin.io" />
+        <label>Info text</label><textarea id="ct-info" rows="3" placeholder="Reach out anytime..."></textarea>
+        <button class="btn" id="btn-save-contact">Save Contact Settings</button>
+      </div>
+      <div class="card">
+        <h2>Contact Messages</h2>
+        <div id="contact-msgs"></div>
+      </div>
+    </section>
+  </div>
+
+<script>
+const ADMIN_EMAIL='admin@slacoin.io', ADMIN_PASS='Admin@123';
+const $ = id => document.getElementById(id);
+function getAccounts(){try{return JSON.parse(localStorage.getItem('sla_accounts')||'{}')}catch{return{}}}
+function saveAccounts(a){localStorage.setItem('sla_accounts',JSON.stringify(a))}
+function getPending(){try{return JSON.parse(localStorage.getItem('sla_pending')||'[]')}catch{return[]}}
+function savePending(l){localStorage.setItem('sla_pending',JSON.stringify(l))}
+function getProducts(){try{const r=localStorage.getItem('sla_admin_products');return r?JSON.parse(r):null}catch{return null}}
+function saveProducts(l){localStorage.setItem('sla_admin_products',JSON.stringify(l))}
+function getCodes(){try{return JSON.parse(localStorage.getItem('sla_recharge_codes')||'{}')}catch{return{}}}
+function saveCodes(c){localStorage.setItem('sla_recharge_codes',JSON.stringify(c))}
+function getDep(){try{return JSON.parse(localStorage.getItem('sla_deposit_config')||'{}')}catch{return{}}}
+function saveDep(c){localStorage.setItem('sla_deposit_config',JSON.stringify(c))}
+function getContactCfg(){try{return JSON.parse(localStorage.getItem('sla_contact_cfg')||'{}')}catch{return{}}}
+function saveContactCfg(c){localStorage.setItem('sla_contact_cfg',JSON.stringify(c))}
+
+$('btn-admin-login').onclick=()=>{
+  if($('admin-email').value.trim()===ADMIN_EMAIL && $('admin-pass').value===ADMIN_PASS){
+    sessionStorage.setItem('sla_admin','1'); showPanel();
+  } else $('login-err').style.display='block';
+};
+$('btn-admin-logout').onclick=()=>{sessionStorage.removeItem('sla_admin');$('admin-panel').classList.add('hidden');$('admin-login').classList.remove('hidden')};
+function showPanel(){$('admin-login').classList.add('hidden');$('admin-panel').classList.remove('hidden');renderAll()}
+if(sessionStorage.getItem('sla_admin')==='1') showPanel();
+
+document.querySelectorAll('.tab').forEach(t=>{
+  t.onclick=()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    ['notif','users','products','deposit','codes','contact'].forEach(id=>{
+      $('tab-'+id).classList.toggle('hidden', id!==t.dataset.tab);
+    });
+  };
+});
+
+function setupDrop(dropId, fileId, hiddenId){
+  const drop=$(dropId), file=$(fileId), hidden=$(hiddenId);
+  drop.onclick=()=>file.click();
+  drop.ondragover=e=>{e.preventDefault();drop.classList.add('dragover')};
+  drop.ondragleave=()=>drop.classList.remove('dragover');
+  drop.ondrop=e=>{e.preventDefault();drop.classList.remove('dragover');if(e.dataTransfer.files[0])readImg(e.dataTransfer.files[0],drop,hidden)};
+  file.onchange=()=>{if(file.files[0])readImg(file.files[0],drop,hidden)};
+}
+function readImg(f,drop,hidden){
+  const r=new FileReader();
+  r.onload=()=>{hidden.value=r.result;drop.innerHTML='<img src="'+r.result+'" alt="preview" /><div class="muted">Click to change</div>';const inp=document.createElement('input');inp.type='file';inp.accept='image/*';inp.hidden=true;inp.id=drop.querySelector('input')?.id||'';drop.appendChild(inp)};
+  r.readAsDataURL(f);
+}
+setupDrop('img-drop','np-img-file','np-img');
+setupDrop('qr-drop','dep-qr-file','dep-qr');
+
+function renderNotifs(){
+  const list=getPending();
+  const el=$('notif-list');
+  if(!list.length){el.innerHTML='<p class="muted">No notifications.</p>';return}
+  el.innerHTML=list.map((r,i)=>`
+    <div class="notif">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <span class="badge ${r.type}">${r.type}</span>
+          <span class="badge pending">${r.status}</span>
+          <strong style="margin-left:.5rem">${r.username||r.name||'—'}</strong>
+          ${r.amount?(' — $'+Number(r.amount).toFixed(2)):''}
+          ${r.code?(' · code '+r.code):''}
+          ${r.btcAddress?('<div class="muted">BTC: '+r.btcAddress+'</div>'):''}
+          ${r.message?('<div class="muted">"'+r.message+'"</div>'):''}
+          <div class="muted">${r.date} · ${r.location||r.email||''}</div>
+        </div>
+        <div class="row">
+          ${(r.type==='deposit'||r.type==='withdraw') && r.status==='pending' ? `
+            <button class="btn" data-approve="${i}">Confirm</button>
+            <button class="btn danger" data-reject="${i}">Reject</button>` : ''}
+          ${r.type==='contact' && r.status==='new' ? `<button class="btn" data-read="${i}">Mark Read</button>`:''}
+        </div>
+      </div>
+    </div>`).join('');
+  el.querySelectorAll('[data-approve]').forEach(btn=>{
+    btn.onclick=()=>{
+      const pending=getPending(); const r=pending[+btn.dataset.approve];
+      if(!r||r.status!=='pending')return;
+      const accounts=getAccounts(); const key=(r.username||'').toLowerCase();
+      if(!accounts[key]) accounts[key]={username:r.username,balance:500,email:(r.username||'')+'@slacoin.io',country:r.location};
+      if(r.type==='deposit') accounts[key].balance=(accounts[key].balance||0)+Number(r.amount);
+      if(r.type==='withdraw') accounts[key].balance=Math.max(0,(accounts[key].balance||0)-Number(r.amount));
+      saveAccounts(accounts); pending[+btn.dataset.approve].status='confirmed'; savePending(pending); renderNotifs(); renderUsers();
+    };
+  });
+  el.querySelectorAll('[data-reject]').forEach(btn=>{
+    btn.onclick=()=>{const pending=getPending();pending[+btn.dataset.reject].status='rejected';savePending(pending);renderNotifs()};
+  });
+  el.querySelectorAll('[data-read]').forEach(btn=>{
+    btn.onclick=()=>{const pending=getPending();pending[+btn.dataset.read].status='read';savePending(pending);renderNotifs()};
+  });
+}
+
+function renderUsers(){
+  const accounts=getAccounts();
+  const body=$('users-body');
+  const rows=Object.values(accounts);
+  if(!rows.length){body.innerHTML='<tr><td colspan="6" class="muted">No users.</td></tr>';return}
+  body.innerHTML=rows.map(u=>`
+    <tr>
+      <td>${u.username}</td>
+      <td>${u.country||'—'}</td>
+      <td>$${Number(u.balance||0).toFixed(2)}</td>
+      <td>${u.referralCode||'—'}</td>
+      <td>${u.invitedBy||'—'}</td>
+      <td><button class="btn danger" data-del-user="${u.username}">Delete</button></td>
+    </tr>`).join('');
+  body.querySelectorAll('[data-del-user]').forEach(btn=>{
+    btn.onclick=()=>{if(!confirm('Delete '+btn.dataset.delUser+'?'))return;const a=getAccounts();delete a[btn.dataset.delUser.toLowerCase()];saveAccounts(a);renderUsers()};
+  });
+}
+
+function defaultProducts(){
+  return [
+    {id:'SLA-NODE-PRO',desc:'Premium SLA Mining Node license.',qty:12,price:299,image:'https://picsum.photos/seed/slanode/400/300',earnPercent:25,earnDays:7},
+    {id:'SLA-STARTER',desc:'Starter package.',qty:120,price:49.99,image:'https://picsum.photos/seed/slastarter/400/300',earnPercent:25,earnDays:7},
+    {id:'SLA-YIELD-30',desc:'Yield offer — earn over a custom admin period.',qty:50,price:100,image:'https://picsum.photos/seed/slayield/400/300',earnPercent:30,earnDays:14}
+  ];
+}
+function renderProductsAdmin(){
+  let list=getProducts(); if(!list){list=defaultProducts();saveProducts(list)}
+  const body=$('products-body');
+  body.innerHTML=list.map((p,i)=>`
+    <tr>
+      <td>${p.image?`<img src="${p.image}" width="40" height="40" style="border-radius:6px;object-fit:cover">`:'—'}</td>
+      <td>${p.id}</td><td>$${Number(p.price).toFixed(2)}</td><td>${p.qty}</td>
+      <td>${p.earnPercent!=null?p.earnPercent+'%':'25%'}</td>
+      <td>${p.earnDays!=null?p.earnDays:'7'}</td>
+      <td><button class="btn danger" data-del-prod="${i}">Delete</button></td>
+    </tr>`).join('');
+  body.querySelectorAll('[data-del-prod]').forEach(btn=>{
+    btn.onclick=()=>{const list=getProducts()||[];list.splice(+btn.dataset.delProd,1);saveProducts(list);renderProductsAdmin()};
+  });
+}
+$('btn-add-product').onclick=()=>{
+  const id=$('np-id').value.trim(), price=parseFloat($('np-price').value), qty=parseInt($('np-qty').value,10);
+  const earnPercent=parseFloat($('np-earn-pct').value); const earnDays=parseInt($('np-earn-days').value,10);
+  const desc=$('np-desc').value.trim()||id, image=$('np-img').value||('https://picsum.photos/seed/'+encodeURIComponent(id)+'/400/300');
+  if(!id||!price||!qty){alert('Fill ID, price, qty');return}
+  if(!earnPercent||earnPercent<=0||!earnDays||earnDays<=0){alert('Set earn % and period (days)');return}
+  const list=getProducts()||defaultProducts();
+  list.push({id,desc,price,qty,image,earnPercent,earnDays}); saveProducts(list); renderProductsAdmin();
+  ['np-id','np-price','np-qty','np-desc','np-img','np-earn-pct','np-earn-days'].forEach(i=>$(i).value='');
+  $('img-drop').innerHTML='Drop image here or click to upload<input type="file" id="np-img-file" accept="image/*" hidden />';
+  setupDrop('img-drop','np-img-file','np-img');
+};
+
+function renderDeposit(){
+  const c=getDep();
+  if(c.btcAddress) $('dep-btc').value=c.btcAddress;
+  if(c.qrDataUrl){
+    $('dep-qr').value=c.qrDataUrl;
+    $('qr-drop').innerHTML='<img src="'+c.qrDataUrl+'" alt="qr" /><div class="muted">Click to change</div><input type="file" id="dep-qr-file" accept="image/*" hidden />';
+    setupDrop('qr-drop','dep-qr-file','dep-qr');
+  }
+}
+$('btn-save-deposit').onclick=()=>{
+  saveDep({btcAddress:$('dep-btc').value.trim(), qrDataUrl:$('dep-qr').value||''});
+  alert('Deposit settings saved');
+};
+
+function renderCodes(){
+  const codes=getCodes();
+  const body=$('codes-body');
+  const keys=Object.keys(codes);
+  if(!keys.length){body.innerHTML='<tr><td colspan="4" class="muted">No codes yet.</td></tr>';return}
+  body.innerHTML=keys.map(k=>`
+    <tr>
+      <td>${k}</td>
+      <td>$${Number(codes[k].amount).toFixed(2)}</td>
+      <td>${codes[k].used?'Used':'Available'}</td>
+      <td><button class="btn danger" data-del-code="${k}">Delete</button></td>
+    </tr>`).join('');
+  body.querySelectorAll('[data-del-code]').forEach(btn=>{
+    btn.onclick=()=>{const c=getCodes();delete c[btn.dataset.delCode];saveCodes(c);renderCodes()};
+  });
+}
+$('btn-add-code').onclick=()=>{
+  const code=($('rc-code').value||'').trim().toUpperCase();
+  const amt=parseFloat($('rc-amt').value);
+  if(!code||!amt){alert('Enter code and amount');return}
+  const c=getCodes();
+  c[code]={amount:amt, used:false};
+  saveCodes(c); renderCodes();
+  $('rc-code').value=''; $('rc-amt').value='';
+};
+
+function renderContact(){
+  const cfg=getContactCfg();
+  if(cfg.telegram) $('ct-tg').value=cfg.telegram;
+  if(cfg.whatsapp) $('ct-wa').value=cfg.whatsapp;
+  if(cfg.email) $('ct-email').value=cfg.email;
+  if(cfg.info) $('ct-info').value=cfg.info;
+  const msgs=JSON.parse(localStorage.getItem('sla_contact_msgs')||'[]');
+  const el=$('contact-msgs');
+  if(!msgs.length) el.innerHTML='<p class="muted">No messages.</p>';
+  else el.innerHTML=msgs.map(m=>`<div class="notif"><strong>${m.name}</strong> (${m.email}) · ${m.username||''}<div class="muted">${m.date}</div><div>${m.message}</div></div>`).join('');
+}
+$('btn-save-contact').onclick=()=>{
+  saveContactCfg({telegram:$('ct-tg').value.trim(),whatsapp:$('ct-wa').value.trim(),email:$('ct-email').value.trim(),info:$('ct-info').value.trim()});
+  alert('Contact settings saved');
+};
+
+function renderAll(){renderNotifs();renderUsers();renderProductsAdmin();renderDeposit();renderCodes();renderContact()}
+setInterval(()=>{if(sessionStorage.getItem('sla_admin')==='1')renderNotifs()},4000);
+</script>
+</body>
+</html>
