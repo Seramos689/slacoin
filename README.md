@@ -27,6 +27,12 @@ Admin: `https://your-service.onrender.com/admin.html`
 - Username: `demo`
 - Password: `Demo@123`
 
+## Storage (Render)
+- Server persists users, balances, purchases, products, codes, and pending requests to `data.json` on disk.
+- Client keeps a local copy (`localStorage`) and syncs via `/api/sync-user`.
+- Earnings are credited to the user balance in real time and when the user returns (offline catch-up).
+- **Note:** On Render free tier the filesystem is ephemeral (resets when the service sleeps/redeploys). For durable data, add a Render **persistent disk** mounted at the app root, or use a database.
+
 ## Local
 ```bash
 cd slacoin-deploy

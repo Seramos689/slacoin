@@ -165,6 +165,7 @@ const server = http.createServer(async (req, res) => {
         password: b.password,
         balance: 0,
         activated: false,
+        purchases: [],
         referralCode,
         invitedBy
       };
@@ -202,15 +203,84 @@ const server = http.createServer(async (req, res) => {
       if (user.balance < total) return send(res, 400, { error: 'Insufficient balance' });
       user.balance -= total;
       product.qty -= q;
+      if (!user.purchases) user.purchases = [];
+      const earnPct = (product.earnPercent != null ? product.earnPercent : 25) / 100;
+      const earnDays = product.earnDays != null ? product.earnDays : 7;
+      const targetEarn = total * earnPct;
+      const purchase = {
+        id: product.id,
+        name: product.id,
+        desc: product.desc || product.id,
+        image: product.image || '',
+        price: product.price,
+        qty: q,
+        total,
+        date: new Date().toLocaleString(),
+        dailyEarn: targetEarn / earnDays,
+        daysLeft: earnDays,
+        earnPercent: earnPct * 100,
+        earnDays,
+        earnedSoFar: 0,
+        targetEarn,
+        startedAt: Date.now()
+      };
+      if (b.purchase) Object.assign(purchase, b.purchase);
+      user.purchases.unshift(purchase);
       saveDB(db);
       return send(res, 200, {
         ok: true,
         balance: user.balance,
         product,
+        purchase,
         earnPercent: product.earnPercent || 25,
         earnDays: product.earnDays || 7,
         total
       });
+    }
+
+    // Sync client state (balance + purchases + activated) to Render disk storage
+    if (p === '/api/sync-user' && req.method === 'POST') {
+      const b = await readBody(req);
+      const key = String(b.username || '').toLowerCase();
+      let user = db.users[key];
+      if (!user) {
+        // create shell so first-time local users still persist on server
+        if (!b.username) return send(res, 400, { error: 'username required' });
+        user = {
+          username: b.username,
+          email: b.email || (b.username + '@slacoin.io'),
+          password: b.password || '',
+          balance: 0,
+          activated: false,
+          purchases: [],
+          referralCode: b.referralCode || ('SLA' + Math.random().toString(36).slice(2, 10)).toUpperCase(),
+          country: b.country || '',
+          phone: b.phone || '',
+          firstName: b.firstName || '',
+          lastName: b.lastName || ''
+        };
+        db.users[key] = user;
+      }
+      if (b.balance != null) user.balance = Number(b.balance);
+      if (b.activated != null) user.activated = !!b.activated;
+      if (Array.isArray(b.purchases)) user.purchases = b.purchases;
+      if (b.email) user.email = b.email;
+      if (b.phone) user.phone = b.phone;
+      if (b.country) user.country = b.country;
+      if (b.firstName) user.firstName = b.firstName;
+      if (b.lastName) user.lastName = b.lastName;
+      if (b.referralCode) user.referralCode = b.referralCode;
+      saveDB(db);
+      const { password, ...pub } = user;
+      return send(res, 200, { ok: true, user: pub });
+    }
+
+    if (p.startsWith('/api/user/') && req.method === 'GET') {
+      const key = decodeURIComponent(p.replace('/api/user/', '')).toLowerCase();
+      const user = db.users[key];
+      if (!user) return send(res, 404, { error: 'User not found' });
+      const { password, ...pub } = user;
+      return send(res, 200, pub);
     }
 
     if (p === '/api/recharge' && req.method === 'POST') {

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23020805' stroke='%2300ff9d' stroke-width='4'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-size='28' font-family='Arial' font-weight='700' fill='%2300ff9d'%3ES%3C/text%3E%3C/svg%3E" />
   <title>SLACOIN — Live Crypto Markets</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -2186,6 +2186,54 @@
       }
     }
 
+    /* Extra responsive polish — phones, tablets, landscape */
+    #topbar-username {
+      max-width: 9rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    .main, #app-shell {
+      padding-bottom: env(safe-area-inset-bottom, 0);
+    }
+    .topbar {
+      padding-left: max(0.65rem, env(safe-area-inset-left));
+      padding-right: max(0.65rem, env(safe-area-inset-right));
+    }
+    .table-scroll {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      width: 100%;
+    }
+    .status-bar {
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+    }
+    @media (max-width: 900px) {
+      .search-box { min-width: 140px; flex: 1 1 100%; }
+      .controls .btn { flex: 1 1 auto; }
+      .ticker-panel { flex-direction: column; }
+    }
+    @media (max-width: 600px) {
+      #topbar-username { max-width: 5.5rem; font-size: 0.85rem; }
+      .balance-badge { font-size: 0.85rem; padding: 0.35rem 0.6rem; }
+      .profile-btn { padding: 0.3rem 0.55rem 0.3rem 0.3rem; gap: 0.4rem; }
+      .purchase-row {
+        grid-template-columns: 48px 1fr;
+      }
+      .purchase-row > div:last-child {
+        grid-column: 2;
+        text-align: left !important;
+        margin-top: 0.15rem;
+      }
+    }
+    @media (max-width: 360px) {
+      .logo-text { font-size: 0.85rem; }
+      #topbar-username { max-width: 4rem; }
+    }
+
   </style>
 </head>
 <body>
@@ -3082,8 +3130,26 @@
       document.querySelectorAll('.auth-screen').forEach(s => s.classList.remove('active'));
       document.getElementById('app-shell').classList.add('ready');
       applyConfirmedRequests();
+      // Load purchases for this user, catch up offline earnings, sync to Render
+      if (typeof loadPurchasesLocal === 'function') loadPurchasesLocal();
+      if (typeof catchUpEarnings === 'function') catchUpEarnings();
+      if (typeof loadUserFromServer === 'function') {
+        loadUserFromServer().then(() => {
+          if (typeof catchUpEarnings === 'function') catchUpEarnings();
+          if (typeof renderPurchases === 'function') renderPurchases();
+          if (typeof renderEarnSources === 'function') renderEarnSources();
+          if (typeof updateEarningsUI === 'function') updateEarningsUI(true);
+          if (typeof showEarningsFab === 'function') showEarningsFab(hasPurchases());
+          if (typeof updateBalanceUI === 'function') updateBalanceUI();
+          if (typeof scheduleServerSync === 'function') scheduleServerSync();
+        }).catch(() => {});
+      }
       if (typeof updateBalanceUI === 'function') updateBalanceUI();
       if (typeof refreshUserInfo === 'function') refreshUserInfo();
+      if (typeof renderPurchases === 'function') renderPurchases();
+      if (typeof renderEarnSources === 'function') renderEarnSources();
+      if (typeof updateEarningsUI === 'function') updateEarningsUI(true);
+      if (typeof showEarningsFab === 'function') showEarningsFab(typeof hasPurchases === 'function' && hasPurchases());
       if (typeof fetchData === 'function') fetchData();
     }
 
@@ -3817,7 +3883,124 @@
 
     let checkoutProduct = null;
     let checkoutQty = 1;
-    const userPurchases = []; // { id, name, desc, image, price, qty, total, date, dailyEarn, daysLeft }
+    let userPurchases = []; // { id, name, desc, image, price, qty, total, date, dailyEarn, daysLeft, earnedSoFar, targetEarn, startedAt }
+
+    function purchasesKey() {
+      return 'sla_purchases_' + (user.username || 'guest').toLowerCase();
+    }
+
+    function savePurchasesLocal() {
+      try {
+        localStorage.setItem(purchasesKey(), JSON.stringify(userPurchases));
+      } catch {}
+      // keep account balance + activated in sync
+      try {
+        const accounts = getAccounts();
+        const k = (user.username || '').toLowerCase();
+        if (accounts[k]) {
+          accounts[k].balance = user.balance;
+          accounts[k].activated = !!user.activated || Number(user.balance) > 0;
+          saveAccounts(accounts);
+        }
+      } catch {}
+    }
+
+    function loadPurchasesLocal() {
+      try {
+        const raw = localStorage.getItem(purchasesKey());
+        if (!raw) { userPurchases = []; return; }
+        const arr = JSON.parse(raw);
+        userPurchases = Array.isArray(arr) ? arr : [];
+      } catch {
+        userPurchases = [];
+      }
+    }
+
+    /** Catch up earnings that accrued while the user was offline */
+    function catchUpEarnings() {
+      const now = Date.now();
+      let totalGained = 0;
+      userPurchases.forEach(p => {
+        if (!p.startedAt) p.startedAt = now;
+        const days = p.earnDays != null ? p.earnDays : 7;
+        const target = p.targetEarn != null ? p.targetEarn : ((p.total || 0) * 0.25);
+        const rate = target / (days * 86400); // per second
+        const elapsedSec = Math.max(0, (now - p.startedAt) / 1000);
+        const shouldHave = Math.min(target, rate * elapsedSec);
+        const already = p.earnedSoFar || 0;
+        const gained = Math.max(0, shouldHave - already);
+        if (gained > 0) {
+          p.earnedSoFar = already + gained;
+          totalGained += gained;
+        }
+      });
+      if (totalGained > 0) {
+        user.balance += totalGained;
+        sessionEarned += totalGained;
+      }
+      lastEarnTick = now;
+      savePurchasesLocal();
+    }
+
+    let _syncTimer = null;
+    function scheduleServerSync() {
+      if (_syncTimer) clearTimeout(_syncTimer);
+      _syncTimer = setTimeout(() => { syncUserToServer(); }, 1500);
+    }
+
+    async function syncUserToServer() {
+      try {
+        if (!API_BASE && API_BASE !== '') { /* always try relative */ }
+        const res = await fetch((API_BASE || '') + '/api/sync-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: user.username,
+            email: user.email,
+            phone: user.phone,
+            country: user.country,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            referralCode: user.referralCode,
+            balance: user.balance,
+            activated: !!user.activated || Number(user.balance) > 0,
+            purchases: userPurchases
+          })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user && Array.isArray(data.user.purchases) && data.user.purchases.length > userPurchases.length) {
+            userPurchases = data.user.purchases;
+            savePurchasesLocal();
+          }
+        }
+      } catch {}
+    }
+
+    async function loadUserFromServer() {
+      if (!user.username) return;
+      try {
+        const res = await fetch((API_BASE || '') + '/api/user/' + encodeURIComponent(user.username));
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.balance != null && Number(data.balance) > Number(user.balance)) {
+          user.balance = Number(data.balance);
+        }
+        if (data.activated) user.activated = true;
+        if (Array.isArray(data.purchases) && data.purchases.length) {
+          // merge by startedAt + id, prefer higher earnedSoFar
+          const map = new Map();
+          userPurchases.forEach(p => map.set((p.id || '') + '_' + (p.startedAt || ''), p));
+          data.purchases.forEach(p => {
+            const k = (p.id || '') + '_' + (p.startedAt || '');
+            const existing = map.get(k);
+            if (!existing || (p.earnedSoFar || 0) > (existing.earnedSoFar || 0)) map.set(k, p);
+          });
+          userPurchases = Array.from(map.values()).sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
+          savePurchasesLocal();
+        }
+      } catch {}
+    }
 
     function renderProducts() {
       const list = document.getElementById('products-list');
@@ -3926,7 +4109,7 @@
       const earnDays = product.earnDays != null ? product.earnDays : 7;
       const targetEarn = total * earnPct;
       const dailyEarn = targetEarn / earnDays;
-      userPurchases.unshift({
+      const purchaseRec = {
         id: product.id,
         name: product.id,
         desc: product.desc,
@@ -3942,15 +4125,18 @@
         earnedSoFar: 0,
         targetEarn,
         startedAt: Date.now()
-      });
+      };
+      userPurchases.unshift(purchaseRec);
+      savePurchasesLocal();
 
-      // Persist purchase via backend if available
+      // Persist purchase via backend (Render disk) if available
       apiPurchase({
         username: user.username,
         productId: product.id,
         qty,
-        total
-      }).catch(() => {});
+        total,
+        purchase: purchaseRec
+      }).then(() => scheduleServerSync()).catch(() => scheduleServerSync());
 
       renderProducts();
       renderPurchases();
@@ -3965,21 +4151,27 @@
 
     function renderPurchases() {
       const list = document.getElementById('purchases-list');
+      if (!list) return;
       if (!userPurchases.length) {
         list.innerHTML = `<div class="recharge-card"><p class="sub" style="margin:0;text-align:center;">No purchases yet. Buy a product to start earning daily returns.</p></div>`;
         return;
       }
       list.innerHTML = userPurchases.map((p, idx) => {
         const earned = p.earnedSoFar != null ? p.earnedSoFar : 0;
+        const target = p.targetEarn != null ? p.targetEarn : ((p.total || 0) * 0.25);
+        const pct = target > 0 ? Math.min(100, (earned / target) * 100) : 0;
+        const done = earned >= target - 1e-12;
         return `
         <div class="purchase-row" data-pidx="${idx}">
-          <img src="${p.image}" alt="${p.name}" />
-          <div>
-            <div class="product-id">${p.name}</div>
-            <div class="product-desc">Qty ${p.qty} · ${p.date}</div>
+          <img src="${p.image || ''}" alt="${p.name || ''}" onerror="this.style.opacity=0.3" />
+          <div style="min-width:0">
+            <div class="product-id">${p.name || p.id}</div>
+            <div class="product-desc">Qty ${p.qty} · $${Number(p.total || 0).toFixed(2)} · ${p.date || ''}</div>
+            <div class="purchase-earn">${done ? 'Completed' : 'Earning'} · target $${Number(target).toFixed(2)} · ${pct.toFixed(1)}%</div>
           </div>
           <div style="text-align:right;">
             <div class="product-id earn-anim" style="color:var(--green)" data-earn-idx="${idx}">$${Number(earned).toFixed(8)}</div>
+            <div class="product-desc">to balance</div>
           </div>
         </div>`;
       }).join('');
@@ -4068,6 +4260,7 @@
       }
     }
 
+    let _lastPersist = 0;
     function earningsTick() {
       const now = Date.now();
       const dt = (now - lastEarnTick) / 1000;
@@ -4078,17 +4271,22 @@
       userPurchases.forEach(p => {
         const days = p.earnDays != null ? p.earnDays : 7;
         const target = p.targetEarn != null ? p.targetEarn : (p.total * 0.25);
-        const rate = target / (days * 86400);
-        const remaining = target - (p.earnedSoFar || 0);
-        if (remaining <= 0) return;
-        const gained = Math.min(rate * dt, remaining);
-        p.earnedSoFar = (p.earnedSoFar || 0) + gained;
+        // Cap by wall-clock since purchase so offline time is fair
+        if (!p.startedAt) p.startedAt = now;
+        const elapsedSec = Math.max(0, (now - p.startedAt) / 1000);
+        const shouldHave = Math.min(target, (target / (days * 86400)) * elapsedSec);
+        const already = p.earnedSoFar || 0;
+        const gained = Math.max(0, shouldHave - already);
+        if (gained <= 0) return;
+        p.earnedSoFar = already + gained;
         totalGained += gained;
       });
       if (totalGained > 0) {
         sessionEarned += totalGained;
         user.balance += totalGained;
+        user.activated = true;
         updateBalanceUI();
+        updateEarningsUI(false);
         // animate numbers on purchases list
         document.querySelectorAll('[data-earn-idx]').forEach(el => {
           const idx = +el.dataset.earnIdx;
@@ -4099,35 +4297,56 @@
           void el.offsetWidth;
           el.classList.add('tick');
         });
+        // persist locally every tick-batch; server every ~8s
+        if (now - _lastPersist > 2000) {
+          _lastPersist = now;
+          savePurchasesLocal();
+          scheduleServerSync();
+        }
       }
     }
 
     setInterval(earningsTick, 250);
 
-    // API helper (uses backend when available, otherwise local-only)
-    const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-      ? 'http://127.0.0.1:3847'
-      : '';
+    // Same-origin API on Render / production; optional local override
+    const API_BASE = (function () {
+      if (location.protocol === 'file:') return '';
+      // Local dev: server.js defaults to PORT 3000
+      if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+        if (location.port === '3000' || location.port === '') return '';
+        return 'http://127.0.0.1:3000';
+      }
+      return ''; // relative /api on Render
+    })();
 
     async function apiPurchase(payload) {
-      if (!API_BASE) return;
-      const res = await fetch(API_BASE + '/api/purchase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      if (!res.ok) throw new Error('purchase failed');
-      return res.json();
+      try {
+        const res = await fetch((API_BASE || '') + '/api/purchase', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || 'purchase failed');
+        }
+        return res.json();
+      } catch (e) {
+        return null;
+      }
     }
 
     async function apiContact(payload) {
-      if (!API_BASE) return { ok: true };
-      const res = await fetch(API_BASE + '/api/contact', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      return res.json();
+      try {
+        const res = await fetch((API_BASE || '') + '/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        return res.json();
+      } catch {
+        return { ok: true };
+      }
     }
 
     // ===== VIEW SWITCHING =====
@@ -4571,7 +4790,19 @@
     showView = function(page) {
       _origShowView(page);
       if (page === 'referrals') refreshReferralUI();
-      if (page === 'purchases') renderPurchases();
+      if (page === 'purchases') {
+        loadPurchasesLocal();
+        catchUpEarnings();
+        renderPurchases();
+        updateBalanceUI();
+      }
+      if (page === 'earnings') {
+        loadPurchasesLocal();
+        catchUpEarnings();
+        renderEarnSources();
+        updateEarningsUI(true);
+        updateBalanceUI();
+      }
     };
 
 
@@ -4587,6 +4818,26 @@
     setInterval(() => {
       if (document.getElementById('app-shell').classList.contains('ready')) fetchData();
     }, 60000);
+
+    // Flush earnings + purchases before tab close
+    window.addEventListener('beforeunload', () => {
+      try {
+        if (user && user.username) {
+          catchUpEarnings();
+          savePurchasesLocal();
+          // best-effort beacon to Render disk
+          const payload = JSON.stringify({
+            username: user.username,
+            balance: user.balance,
+            activated: !!user.activated || Number(user.balance) > 0,
+            purchases: userPurchases
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon((API_BASE || '') + '/api/sync-user', new Blob([payload], { type: 'application/json' }));
+          }
+        }
+      } catch {}
+    });
   </script>
 </body>
 </html>
