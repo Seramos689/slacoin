@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23020805' stroke='%2300ff9d' stroke-width='4'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-size='28' font-family='Arial' font-weight='700' fill='%2300ff9d'%3ES%3C/text%3E%3C/svg%3E" />
   <title>SLACOIN — Live Crypto Markets</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -3053,7 +3054,10 @@
           if (r.status !== 'confirmed') return;
           if (applied.includes(r.id)) return;
           if (r.username !== user.username) return;
-          if (r.type === 'deposit') user.balance += Number(r.amount);
+          if (r.type === 'deposit') {
+            user.balance += Number(r.amount);
+            user.activated = true;
+          }
           if (r.type === 'withdraw') user.balance = Math.max(0, user.balance - Number(r.amount));
           applied.push(r.id);
           changed = true;
@@ -3066,6 +3070,7 @@
             const key = user.username.toLowerCase();
             if (accounts[key]) {
               accounts[key].balance = user.balance;
+              if (user.activated) accounts[key].activated = true;
               localStorage.setItem('sla_accounts', JSON.stringify(accounts));
             }
           } catch {}
@@ -3126,6 +3131,41 @@
     function saveAccounts(acc) {
       localStorage.setItem('sla_accounts', JSON.stringify(acc));
     }
+
+    function isAccountActivated() {
+      if (user.activated) return true;
+      try {
+        const accounts = getAccounts();
+        const a = accounts[(user.username || '').toLowerCase()];
+        if (a && a.activated) { user.activated = true; return true; }
+      } catch {}
+      try {
+        const pending = JSON.parse(localStorage.getItem('sla_pending') || '[]');
+        const ok = pending.some(r => r.type === 'deposit' && r.status === 'confirmed' && r.username === user.username);
+        if (ok) {
+          user.activated = true;
+          try {
+            const accounts = getAccounts();
+            const k = (user.username || '').toLowerCase();
+            if (accounts[k]) { accounts[k].activated = true; saveAccounts(accounts); }
+          } catch {}
+          return true;
+        }
+      } catch {}
+      return false;
+    }
+
+    function requireActivation(actionLabel) {
+      if (isAccountActivated()) return true;
+      showToast('Activate your account by depositing funds first to ' + (actionLabel || 'continue'), true);
+      try {
+        document.getElementById('modal-deposit-amount').value = '';
+        openModal('modal-deposit');
+      } catch {}
+      return false;
+    }
+
+
 
     document.getElementById('link-to-register').addEventListener('click', e => {
       e.preventDefault();
@@ -3199,7 +3239,8 @@
         firstName: account.firstName || '',
         lastName: account.lastName || '',
         referralCode: account.referralCode,
-        invitedBy: account.invitedBy || null
+        invitedBy: account.invitedBy || null,
+        activated: !!account.activated
       });
 
       if (document.getElementById('login-remember').checked) {
@@ -3286,6 +3327,7 @@
         email: email,
         password,
         balance: 0,
+        activated: false,
         referralCode: myRef,
         invitedBy: invitedBy
       };
@@ -3297,6 +3339,7 @@
         phone: fullPhone,
         country,
         balance: 0,
+        activated: false,
         firstName,
         lastName,
         referralCode: myRef,
@@ -3684,6 +3727,7 @@
     }
 
     function processRecharge() {
+      if (!requireActivation('use a recharge code')) return;
       const codeRaw = (document.getElementById('recharge-code').value || '').trim().toUpperCase();
       if (!codeRaw) {
         showToast('Please enter code', true);
@@ -3788,6 +3832,7 @@
     }
 
     function openQtyModal(productId) {
+      if (!requireActivation('purchase products')) return;
       const product = products.find(p => p.id === productId);
       if (!product || product.qty <= 0) {
         showToast('Product out of stock', true);
@@ -3833,6 +3878,7 @@
     }
 
     function confirmOrder() {
+      if (!requireActivation('purchase products')) return;
       if (!checkoutProduct) return;
       const product = checkoutProduct;
       const qty = checkoutQty;
@@ -4409,6 +4455,7 @@
     });
 
     document.getElementById('btn-buy-recharge').addEventListener('click', () => {
+      if (!requireActivation('buy recharge')) return;
       const amount = parseFloat(document.getElementById('buy-recharge-amount').value);
       if (!amount || amount <= 0) {
         showToast('Enter or select a valid amount', true);

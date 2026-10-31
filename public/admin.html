@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23020805' stroke='%2300ff9d' stroke-width='4'/%3E%3Ctext x='32' y='40' text-anchor='middle' font-size='28' font-family='Arial' font-weight='700' fill='%2300ff9d'%3ES%3C/text%3E%3C/svg%3E" />
   <title>SLACOIN — Admin Panel</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
@@ -68,11 +69,11 @@
       <p class="muted" style="text-align:center;margin-bottom:1rem">Sign in with admin email & password</p>
       <div class="err" id="login-err">Invalid credentials</div>
       <label>Email</label>
-      <input type="email" id="admin-email" value="admin@slacoin.io" />
+      <input type="email" id="admin-email" placeholder="Email" autocomplete="username" />
       <label>Password</label>
       <input type="password" id="admin-pass" />
       <button class="btn" id="btn-admin-login" style="width:100%">Login</button>
-      <p class="muted" style="text-align:center;margin-top:1rem;font-size:.8rem">Default: admin@slacoin.io / Admin@123</p>
+      
     </div>
   </div>
 
@@ -80,7 +81,7 @@
     <div class="topbar">
       <h1>Admin Panel</h1>
       <div class="row">
-        <span class="muted">admin@slacoin.io</span>
+        <span class="muted" id="admin-who">Admin</span>
         <button class="btn ghost" id="btn-admin-logout">Logout</button>
       </div>
     </div>
@@ -91,6 +92,7 @@
       <button class="tab" data-tab="deposit">Deposit BTC</button>
       <button class="tab" data-tab="codes">Recharge Codes</button>
       <button class="tab" data-tab="contact">Contact Us</button>
+      <button class="tab" data-tab="settings">Settings</button>
     </div>
 
     <section id="tab-notif">
@@ -167,6 +169,22 @@
       </div>
     </section>
 
+    <section id="tab-settings" class="hidden">
+      <div class="card">
+        <h2>Change Admin Email / Password</h2>
+        <p class="muted" style="margin-bottom:.85rem">Update the credentials used to sign in to this panel.</p>
+        <label>Current password</label>
+        <input type="password" id="adm-cur-pass" placeholder="Current password" />
+        <label>New email</label>
+        <input type="email" id="adm-new-email" placeholder="New email" />
+        <label>New password</label>
+        <input type="password" id="adm-new-pass" placeholder="New password (min 6 chars)" />
+        <label>Confirm new password</label>
+        <input type="password" id="adm-new-pass2" placeholder="Confirm new password" />
+        <button class="btn" id="btn-save-admin-cred">Save credentials</button>
+      </div>
+    </section>
+
     <section id="tab-contact" class="hidden">
       <div class="card">
         <h2>Contact Us Settings</h2>
@@ -184,8 +202,18 @@
   </div>
 
 <script>
-const ADMIN_EMAIL='admin@slacoin.io', ADMIN_PASS='Admin@123';
 const $ = id => document.getElementById(id);
+function getAdminCreds() {
+  try {
+    const c = JSON.parse(localStorage.getItem('sla_admin_creds') || 'null');
+    if (c && c.email && c.password) return c;
+  } catch {}
+  const seed = { email: 'admin@slacoin.io', password: 'Admin@123' };
+  localStorage.setItem('sla_admin_creds', JSON.stringify(seed));
+  return seed;
+}
+function saveAdminCreds(c) { localStorage.setItem('sla_admin_creds', JSON.stringify(c)); }
+
 function getAccounts(){try{return JSON.parse(localStorage.getItem('sla_accounts')||'{}')}catch{return{}}}
 function saveAccounts(a){localStorage.setItem('sla_accounts',JSON.stringify(a))}
 function getPending(){try{return JSON.parse(localStorage.getItem('sla_pending')||'[]')}catch{return[]}}
@@ -200,19 +228,30 @@ function getContactCfg(){try{return JSON.parse(localStorage.getItem('sla_contact
 function saveContactCfg(c){localStorage.setItem('sla_contact_cfg',JSON.stringify(c))}
 
 $('btn-admin-login').onclick=()=>{
-  if($('admin-email').value.trim()===ADMIN_EMAIL && $('admin-pass').value===ADMIN_PASS){
-    sessionStorage.setItem('sla_admin','1'); showPanel();
-  } else $('login-err').style.display='block';
+  const creds = getAdminCreds();
+  const email = $('admin-email').value.trim();
+  const pass = $('admin-pass').value;
+  if(email === creds.email && pass === creds.password){
+    sessionStorage.setItem('sla_admin','1');
+    showPanel();
+  } else {
+    $('login-err').style.display='block';
+  }
 };
 $('btn-admin-logout').onclick=()=>{sessionStorage.removeItem('sla_admin');$('admin-panel').classList.add('hidden');$('admin-login').classList.remove('hidden')};
-function showPanel(){$('admin-login').classList.add('hidden');$('admin-panel').classList.remove('hidden');renderAll()}
+function showPanel(){
+  $('admin-login').classList.add('hidden');
+  $('admin-panel').classList.remove('hidden');
+  try { const c = getAdminCreds(); if ($('admin-who')) $('admin-who').textContent = c.email; } catch {}
+  renderAll();
+}
 if(sessionStorage.getItem('sla_admin')==='1') showPanel();
 
 document.querySelectorAll('.tab').forEach(t=>{
   t.onclick=()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
-    ['notif','users','products','deposit','codes','contact'].forEach(id=>{
+    ['notif','users','products','deposit','codes','contact','settings'].forEach(id=>{
       $('tab-'+id).classList.toggle('hidden', id!==t.dataset.tab);
     });
   };
@@ -265,7 +304,7 @@ function renderNotifs(){
       if(!r||r.status!=='pending')return;
       const accounts=getAccounts(); const key=(r.username||'').toLowerCase();
       if(!accounts[key]) accounts[key]={username:r.username,balance:500,email:(r.username||'')+'@slacoin.io',country:r.location};
-      if(r.type==='deposit') accounts[key].balance=(accounts[key].balance||0)+Number(r.amount);
+      if(r.type==='deposit'){ accounts[key].balance=(accounts[key].balance||0)+Number(r.amount); accounts[key].activated=true; }
       if(r.type==='withdraw') accounts[key].balance=Math.max(0,(accounts[key].balance||0)-Number(r.amount));
       saveAccounts(accounts); pending[+btn.dataset.approve].status='confirmed'; savePending(pending); renderNotifs(); renderUsers();
     };
@@ -388,6 +427,21 @@ $('btn-save-contact').onclick=()=>{
   alert('Contact settings saved');
 };
 
+$('btn-save-admin-cred').onclick=()=>{
+  const creds = getAdminCreds();
+  const cur = $('adm-cur-pass').value;
+  const email = $('adm-new-email').value.trim();
+  const p1 = $('adm-new-pass').value;
+  const p2 = $('adm-new-pass2').value;
+  if (cur !== creds.password) { alert('Current password is incorrect'); return; }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { alert('Enter a valid new email'); return; }
+  if (!p1 || p1.length < 6) { alert('New password must be at least 6 characters'); return; }
+  if (p1 !== p2) { alert('New passwords do not match'); return; }
+  saveAdminCreds({ email, password: p1 });
+  alert('Admin credentials updated. Use the new email/password next login.');
+  $('adm-cur-pass').value=''; $('adm-new-email').value=''; $('adm-new-pass').value=''; $('adm-new-pass2').value='';
+  if ($('admin-who')) $('admin-who').textContent = email;
+};
 function renderAll(){renderNotifs();renderUsers();renderProductsAdmin();renderDeposit();renderCodes();renderContact()}
 setInterval(()=>{if(sessionStorage.getItem('sla_admin')==='1')renderNotifs()},4000);
 </script>
