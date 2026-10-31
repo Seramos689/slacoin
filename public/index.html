@@ -2475,7 +2475,7 @@
             <circle cx="12" cy="7" r="4"/>
           </svg>
         </span>
-        <span>Profile</span>
+        <span id="topbar-username">Profile</span>
       </button>
     </div>
 
@@ -2561,7 +2561,7 @@
       <div class="controls">
         <div class="search-box">
           <span class="search-icon">⌕</span>
-          <input type="text" id="search" placeholder="Search by name or symbol…" autocomplete="off" />
+          <input type="search" id="search" name="coin-search" placeholder="Search by name or symbol…" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
         </div>
         <button class="btn" id="btn-refresh">↻ Refresh</button>
         <button class="btn active" data-sort="market_cap">Market Cap</button>
@@ -4220,6 +4220,8 @@
       document.getElementById('info-email').textContent = user.email;
       document.getElementById('info-phone').textContent = user.phone;
       document.getElementById('info-country').textContent = user.country;
+      const topUser = document.getElementById('topbar-username');
+      if (topUser) topUser.textContent = user.username || 'Profile';
     }
 
     document.getElementById('profile-btn').addEventListener('click', openProfile);
