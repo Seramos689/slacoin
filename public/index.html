@@ -2275,6 +2275,11 @@
           <div class="error-msg">Required</div>
         </div>
         <div class="auth-field">
+          <label>Email <span class="req">*</span></label>
+          <input type="email" id="reg-email" required placeholder="you@example.com" autocomplete="email" />
+          <div class="error-msg">Valid email required</div>
+        </div>
+        <div class="auth-field">
           <label>Phone Number <span class="req">*</span></label>
           <div class="phone-row">
             <select id="reg-phone-code" required aria-label="Country code">
@@ -2936,8 +2941,9 @@
         <img id="modal-deposit-qr" alt="BTC QR" width="160" height="160" style="border-radius:12px;border:1px solid var(--border);background:#fff;" />
       </div>
       <p id="modal-deposit-amt-label">Amount: $0.00</p>
+      <p style="color:var(--green);font-weight:600;text-align:center;">Please wait for the amount to reflect on your account.</p>
       <div class="modal-actions">
-        <button class="btn active" id="modal-deposit-done" style="flex:1">I Have Sent BTC</button>
+        <button class="btn active" id="modal-deposit-done" style="flex:1">OK</button>
       </div>
     </div>
   </div>
@@ -3025,7 +3031,7 @@
       email: 'trader@slacoin.io',
       phone: '+1 555 010 2233',
       country: 'United States',
-      balance: 500.00,
+      balance: 0,
       firstName: '',
       lastName: ''
     };
@@ -3168,7 +3174,7 @@
           country: 'United States',
           firstName: 'Demo',
           lastName: 'User',
-          balance: 500,
+          balance: 0,
           password: 'Demo@123'
         };
       }
@@ -3189,7 +3195,7 @@
         email: account.email || account.username + '@slacoin.io',
         phone: account.phone || '',
         country: account.country || '',
-        balance: account.balance != null ? account.balance : 500,
+        balance: account.balance != null ? account.balance : 0,
         firstName: account.firstName || '',
         lastName: account.lastName || '',
         referralCode: account.referralCode,
@@ -3227,6 +3233,7 @@
       const firstName = document.getElementById('reg-firstname').value.trim();
       const lastName = document.getElementById('reg-lastname').value.trim();
       const username = document.getElementById('reg-username').value.trim();
+      const email = (document.getElementById('reg-email') && document.getElementById('reg-email').value.trim()) || '';
       const phoneCode = document.getElementById('reg-phone-code').value;
       const phone = document.getElementById('reg-phone').value.trim();
       const country = document.getElementById('reg-country').value;
@@ -3237,6 +3244,7 @@
       if (!firstName) { markInvalid(document.getElementById('reg-firstname')); ok = false; }
       if (!lastName) { markInvalid(document.getElementById('reg-lastname')); ok = false; }
       if (!username) { markInvalid(document.getElementById('reg-username')); ok = false; }
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { markInvalid(document.getElementById('reg-email'), 'Valid email required'); ok = false; }
       if (!phoneCode || !phone) {
         markInvalid(document.getElementById('reg-phone'), 'Country code and phone are required');
         ok = false;
@@ -3275,9 +3283,9 @@
         lastName,
         phone: fullPhone,
         country,
-        email: username + '@slacoin.io',
+        email: email,
         password,
-        balance: 500,
+        balance: 0,
         referralCode: myRef,
         invitedBy: invitedBy
       };
@@ -3285,10 +3293,10 @@
 
       Object.assign(user, {
         username,
-        email: username + '@slacoin.io',
+        email: email,
         phone: fullPhone,
         country,
-        balance: 500,
+        balance: 0,
         firstName,
         lastName,
         referralCode: myRef,
@@ -3313,7 +3321,7 @@
             email: account.email || account.username + '@slacoin.io',
             phone: account.phone || '',
             country: account.country || '',
-            balance: account.balance != null ? account.balance : 500,
+            balance: account.balance != null ? account.balance : 0,
             firstName: account.firstName || '',
             lastName: account.lastName || ''
           });
@@ -3325,7 +3333,7 @@
             email: 'demo@slacoin.io',
             phone: '+1 555 010 0000',
             country: 'United States',
-            balance: 500
+            balance: 0
           });
           return true;
         }
@@ -4287,25 +4295,7 @@
       const amt = parseFloat(document.getElementById('modal-deposit-amount').value);
       if (!amt || amt <= 0) { showToast('Enter a valid amount', true); return; }
       window._pendingDepositAmt = amt;
-      closeModal('modal-deposit');
-      document.getElementById('modal-deposit-wallet').textContent = getUserWallet();
-      document.getElementById('modal-deposit-amt-label').textContent = 'Amount: $' + amt.toFixed(2);
-      const qr = getDepositQr();
-      const wrap = document.getElementById('modal-deposit-qr-wrap');
-      const img = document.getElementById('modal-deposit-qr');
-      if (qr && wrap && img) {
-        img.src = qr;
-        wrap.style.display = 'block';
-      } else if (wrap) {
-        // fallback QR from address via public API
-        const addr = getUserWallet();
-        if (img) img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(addr);
-        wrap.style.display = 'block';
-      }
-      openModal('modal-deposit-btc');
-    });
-    document.getElementById('modal-deposit-done').addEventListener('click', () => {
-      const amt = window._pendingDepositAmt || 0;
+      // Notify admin immediately when user clicks Deposit
       pendingRequests.unshift({
         id: 'DEP-' + Date.now(),
         type: 'deposit',
@@ -4316,8 +4306,25 @@
         location: user.country || 'Unknown'
       });
       savePending();
+      closeModal('modal-deposit');
+      document.getElementById('modal-deposit-wallet').textContent = getUserWallet();
+      document.getElementById('modal-deposit-amt-label').textContent = 'Amount: $' + amt.toFixed(2);
+      const qr = getDepositQr();
+      const wrap = document.getElementById('modal-deposit-qr-wrap');
+      const img = document.getElementById('modal-deposit-qr');
+      if (qr && wrap && img) {
+        img.src = qr;
+        wrap.style.display = 'block';
+      } else if (wrap) {
+        const addr = getUserWallet();
+        if (img) img.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=' + encodeURIComponent(addr);
+        wrap.style.display = 'block';
+      }
+      openModal('modal-deposit-btc');
+      showToast('Please wait for the amount to reflect on your account.');
+    });
+    document.getElementById('modal-deposit-done').addEventListener('click', () => {
       closeModal('modal-deposit-btc');
-      showToast('Deposit request submitted. Waiting for admin confirmation.');
     });
 
     // Withdraw flow

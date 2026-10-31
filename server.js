@@ -78,7 +78,9 @@ function readBody(req) {
 }
 
 function serveStatic(req, res, pathname) {
-  let filePath = pathname === '/' ? '/index.html' : pathname;
+  let filePath = pathname;
+  if (pathname === '/' || pathname === '') filePath = '/index.html';
+  else if (pathname === '/admin' || pathname === '/admin/') filePath = '/admin.html';
   filePath = path.normalize(filePath).replace(/^(\.\.[/\\])+/, '');
   const full = path.join(PUBLIC, filePath);
   if (!full.startsWith(PUBLIC)) {
@@ -161,7 +163,7 @@ const server = http.createServer(async (req, res) => {
         country: b.country || '',
         email: b.email || (b.username + '@slacoin.io'),
         password: b.password,
-        balance: 500,
+        balance: 0,
         referralCode,
         invitedBy
       };
@@ -177,7 +179,7 @@ const server = http.createServer(async (req, res) => {
         (u.email && u.email.toLowerCase() === key) || u.username.toLowerCase() === key
       );
       if (!user && b.username === 'demo' && b.password === 'Demo@123') {
-        user = { username: 'demo', email: 'demo@slacoin.io', balance: 500, referralCode: 'SLADEMO01', country: 'United States', password: 'Demo@123' };
+        user = { username: 'demo', email: 'demo@slacoin.io', balance: 0, referralCode: 'SLADEMO01', country: 'United States', password: 'Demo@123' };
       }
       if (!user || user.password !== b.password) return send(res, 401, { error: 'Invalid credentials' });
       const { password, ...pub } = user;
