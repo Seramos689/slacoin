@@ -206,7 +206,8 @@ const server = http.createServer(async (req, res) => {
       if (!user.purchases) user.purchases = [];
       const earnPct = (product.earnPercent != null ? product.earnPercent : 25) / 100;
       const earnDays = product.earnDays != null ? product.earnDays : 7;
-      const targetEarn = total * earnPct;
+      // Capital returned + earn % profit
+      const targetEarn = total * (1 + earnPct);
       const purchase = {
         id: product.id,
         name: product.id,

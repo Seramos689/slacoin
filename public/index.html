@@ -3923,7 +3923,14 @@
       userPurchases.forEach(p => {
         if (!p.startedAt) p.startedAt = now;
         const days = p.earnDays != null ? p.earnDays : 7;
-        const target = p.targetEarn != null ? p.targetEarn : ((p.total || 0) * 0.25);
+        const pct = (p.earnPercent != null ? p.earnPercent : 25) / 100;
+        // Prefer stored target; else capital + earn%
+        let target = p.targetEarn != null ? p.targetEarn : ((p.total || 0) * (1 + pct));
+        // Migrate older purchases that only stored the profit portion
+        if (p.total && target < Number(p.total) * 0.99) {
+          target = Number(p.total) * (1 + pct);
+          p.targetEarn = target;
+        }
         const rate = target / (days * 86400); // per second
         const elapsedSec = Math.max(0, (now - p.startedAt) / 1000);
         const shouldHave = Math.min(target, rate * elapsedSec);
@@ -4017,7 +4024,7 @@
               <span class="price">$${Number(p.price).toFixed(2)}</span>
               <span class="stock">${p.qty > 0 ? p.qty + ' in stock' : 'Sold out'}</span>
             </div>
-            <div class="product-earn-offer">Earn ${pct}% over ${days} day${days===1?'':'s'}</div>
+            <div class="product-earn-offer">Get price back + ${pct}% over ${days} day${days===1?'':'s'}</div>
           </div>
           <button class="btn-cart" data-id="${p.id}" ${p.qty <= 0 ? 'disabled' : ''}>🛒 Cart</button>
         </article>`;
@@ -4107,7 +4114,8 @@
 
       const earnPct = (product.earnPercent != null ? product.earnPercent : 25) / 100;
       const earnDays = product.earnDays != null ? product.earnDays : 7;
-      const targetEarn = total * earnPct;
+      // User earns back the purchase price PLUS the earn % (capital + profit)
+      const targetEarn = total * (1 + earnPct);
       const dailyEarn = targetEarn / earnDays;
       const purchaseRec = {
         id: product.id,
@@ -4158,7 +4166,12 @@
       }
       list.innerHTML = userPurchases.map((p, idx) => {
         const earned = p.earnedSoFar != null ? p.earnedSoFar : 0;
-        const target = p.targetEarn != null ? p.targetEarn : ((p.total || 0) * 0.25);
+        const ep = (p.earnPercent != null ? p.earnPercent : 25) / 100;
+        let target = p.targetEarn != null ? p.targetEarn : ((p.total || 0) * (1 + ep));
+        if (p.total && target < Number(p.total) * 0.99) {
+          target = Number(p.total) * (1 + ep);
+          p.targetEarn = target;
+        }
         const pct = target > 0 ? Math.min(100, (earned / target) * 100) : 0;
         const done = earned >= target - 1e-12;
         return `
@@ -4270,7 +4283,14 @@
       let totalGained = 0;
       userPurchases.forEach(p => {
         const days = p.earnDays != null ? p.earnDays : 7;
-        const target = p.targetEarn != null ? p.targetEarn : (p.total * 0.25);
+        const ep = (p.earnPercent != null ? p.earnPercent : 25) / 100;
+        let target = p.targetEarn != null ? p.targetEarn : ((p.total || 0) * (1 + ep));
+        // Migrate older purchases that only stored the profit portion
+        if (p.total && target < Number(p.total) * 0.99) {
+          target = Number(p.total) * (1 + ep);
+          p.targetEarn = target;
+          p.dailyEarn = target / days;
+        }
         // Cap by wall-clock since purchase so offline time is fair
         if (!p.startedAt) p.startedAt = now;
         const elapsedSec = Math.max(0, (now - p.startedAt) / 1000);
